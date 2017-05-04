@@ -1,0 +1,66 @@
+---
+title: "Network of Thrones Recreation in R"
+author: "Aaron Trask"
+date: "6/23/2016"
+output: html_document
+description: "Drawn from Network of Thrones by Andrew Beveridge and Jie Shan which was published in the April 2016 Math Horizons www.maa.org/mathhorizons"
+
+```{r setup, include=FALSE}
+require(igraph)
+require(scales)
+require(ggplot2)
+require(grid)
+require(dplyr)
+```
+
+## Loading the Network
+
+The authors published their graph as a list of edges with weights in csv format.  Here we load it into a table and then create the graph object from the table.
+
+```{r}
+t <- read.csv("stormofswords.csv", header=TRUE)
+g <- graph.data.frame(t,directed=FALSE)
+```
+
+## Exploring the Network
+### Page Rank
+```{r}
+V(g)$page_rank <- page_rank(g)$vector
+pr <- data.frame(name = V(g)$name, page_rank = V(g)$page_rank)
+ggplot(pr, aes(x = reorder(name, -page_rank), y = page_rank)) + 
+  geom_bar(data = subset(pr, page_rank > quantile(page_rank, prob = 0.90)), stat = "identity") + 
+  theme(axis.text.x = element_text(angle=90))
+```
+
+### Betweenness
+```{r}
+V(g)$betweenness <- betweenness(g)
+bc <- data.frame(name = V(g)$name, betweenness = V(g)$betweenness)
+ggplot(bc, aes(x = reorder(name, -betweenness), y = betweenness)) + 
+  geom_bar(data = subset(bc, betweenness > quantile(betweenness, prob = 0.90)), stat = "identity") + 
+  theme(axis.text.x = element_text(angle=90))
+```
+
+### Compute Clusters
+```{r}
+communities <- cluster_louvain(g)
+```
+
+## Plotting the Network
+
+```{r}
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+V(g)$label <- V(g)$name
+V(g)$label.cex <- rescale(V(g)$betweenness, c(0.5,1.5)) #size the label by the betweenness
+V(g)$label.family <- "Century Gothic"
+V(g)$label.font <- 2
+V(g)$label.degree <- pi/2
+V(g)$label.dist <- V(g)$label.cex/4
+V(g)$size <- rescale(V(g)$page_rank, c(1,5)) #size the verticies by their page rank
+V(g)$frame.color <- "white"
+V(g)$color <- cbPalette[membership(communities)] #color the verticies by the cluster membership
+E(g)$arrow.mode <- 0
+E(g)$width <- rescale(E(g)$Weight, c(1,5)) #weight the edges
+E(g)$curved <- .5
+plot(g, layout=layout.davidson.harel)
+```
